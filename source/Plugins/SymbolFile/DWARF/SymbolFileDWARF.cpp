@@ -56,81 +56,87 @@
 using namespace lldb;
 using namespace lldb_private;
 
+// FIXME:  We should have a common header all DWARF stuff.
+#ifdef __APPLE__
+# define SECT_PFX "__"
+#else
+# define SECT_PFX "."
+#endif
 
 static const ConstString&
 GetSectionNameDebugInfo()
 {
-    static const ConstString g_sect_name("__debug_info");
+    static const ConstString g_sect_name (SECT_PFX "debug_info");
     return g_sect_name;
 }
 
 static const ConstString&
 GetSectionNameDebugAbbrev()
 {
-    static const ConstString g_sect_name ("__debug_abbrev");
+    static const ConstString g_sect_name (SECT_PFX "debug_abbrev");
     return g_sect_name;
 }
 
 static const ConstString&
 GetSectionNameDebugAranges()
 {
-    static const ConstString g_sect_name ("__debug_aranges");
+    static const ConstString g_sect_name (SECT_PFX "debug_aranges");
     return g_sect_name;
 }
 
 static const ConstString&
 GetSectionNameDebugFrame()
 {
-    static const ConstString g_sect_name ("__debug_frame");
+    static const ConstString g_sect_name (SECT_PFX "debug_frame");
     return g_sect_name;
 }
 
 static const ConstString&
 GetSectionNameDebugLine()
 {
-    static const ConstString g_sect_name ("__debug_line");
+    static const ConstString g_sect_name (SECT_PFX "debug_line");
     return g_sect_name;
 }
 
 static const ConstString&
 GetSectionNameDebugLoc()
 {
-    static const ConstString g_sect_name ("__debug_loc");
+    static const ConstString g_sect_name (SECT_PFX "debug_loc");
     return g_sect_name;
 }
 
 static const ConstString&
 GetSectionNameDebugMacInfo()
 {
-    static const ConstString g_sect_name ("__debug_macinfo");
+    static const ConstString g_sect_name (SECT_PFX "debug_macinfo");
     return g_sect_name;
 }
 
 static const ConstString&
 GetSectionNameDebugPubNames()
 {
-    static const ConstString g_sect_name ("__debug_pubnames");
+    static const ConstString g_sect_name (SECT_PFX "debug_pubnames");
     return g_sect_name;
 }
 
 static const ConstString&
 GetSectionNameDebugPubTypes()
 {
-    static const ConstString g_sect_name ("__debug_pubtypes");
+    static const ConstString g_sect_name (SECT_PFX "debug_pubtypes");
     return g_sect_name;
 }
 
 static const ConstString&
 GetSectionNameDebugRanges()
 {
-    static const ConstString g_sect_name ("__debug_ranges");
+    static const ConstString g_sect_name (SECT_PFX "debug_ranges");
     return g_sect_name;
 }
 
 static const ConstString&
 GetSectionNameDebugStr()
 {
-    static const ConstString g_sect_name ("__debug_str");
+    static const ConstString g_sect_name (SECT_PFX "debug_str");
     return g_sect_name;
 }
 

@@ -23,7 +23,6 @@ LinuxThread::LinuxThread(Process &process, lldb::tid_t tid)
     : Thread(process, tid),
       m_frame_ap(0),
       m_register_ap(0),
-      m_break_id(LLDB_INVALID_BREAK_ID),
       m_note(eNone)
 {
     ArchSpec arch = process.GetTarget().GetArchitecture();
@@ -113,7 +112,7 @@ LinuxThread::GetRawStopReason(StopInfo *stop_info)
         break;
 
     case eBreak:
-        stop_info->SetStopReasonWithBreakpointSiteID(m_break_id);
+        stop_info->SetStopReasonWithBreakpointSiteID(m_breakpoint->GetID());
         break;
 
     case eTrace:
@@ -124,28 +123,60 @@ LinuxThread::GetRawStopReason(StopInfo *stop_info)
 }
 
 bool
+LinuxThread::WillResume(lldb::StateType resume_state)
+{
+    SetResumeState(resume_state);
+    return Thread::WillResume(resume_state);
+} 
+
+bool
 LinuxThread::Resume()
 {
+    lldb::StateType resume_state = GetResumeState();
     ProcessMonitor &monitor = GetMonitor();
-    bool result = monitor.Resume();
+    bool status;
 
-    if (result)
+    switch (GetResumeState())
     {
-        m_note = eNone;
-        SetState(lldb::eStateRunning);
+    default:
+        assert(false && "Unexpected state for resume!");
+        status = false;
+        break;
+
+    case lldb::eStateSuspended:
+        // FIXME: Implement process suspension.
+        status = false;
+
+    case lldb::eStateRunning:
+        SetState(resume_state);
+        status = monitor.Resume();
+        break;
+
+    case lldb::eStateStepping:
+        SetState(resume_state);
+        status = GetRegisterContext()->HardwareSingleStep(true);
+        break;
     }
 
-    return result;
+    m_note = eNone;
+    return status;
 }
 
 void
-LinuxThread::BreakNotify(lldb::break_id_t bid)
+LinuxThread::BreakNotify()
 {
-    if (m_note == eBreak && m_break_id == bid)
-        return;
+    // Resolve the breakpoint corresponding to our current PC.
+    //
+    // FIXME: This is i386/x86_64 specific. When we hit a breakpoint the current
+    // PC points one past the actual breakpoint address.
+    lldb::addr_t pc = GetRegisterContext()->GetPC() - 1;
+    lldb::BreakpointSiteSP bp_site = 
+        GetProcess().GetBreakpointSiteList().FindByAddress(pc);
+    assert(bp_site && bp_site->ValidForThisThread(this));
+    GetRegisterContext()->SetPC(pc);
 
     m_note = eBreak;
-    m_break_id = bid;
+    m_breakpoint = bp_site;
 }
 
 void

@@ -139,7 +139,6 @@ ProcessLinux::DoLaunch(Module *module,
     if (!error.Success())
         return error;
 
-    SetPrivateState(eStateRunning);
     return error;
 }
 
@@ -199,7 +198,21 @@ ProcessLinux::SendMessage(const ProcessMessage &message)
 {
     Mutex::Locker lock(m_message_mutex);
     m_message_queue.push_back(message);
-    SetPrivateState(eStateStopped);
+
+    switch (message.GetKind())
+    {
+    default:
+        SetPrivateState(eStateStopped);
+        break;
+
+    case ProcessMessage::eExitMessage:
+        SetExitStatus(message.GetExitStatus(), NULL);
+        break;
+
+    case ProcessMessage::eSignalMessage:
+        SetExitStatus(-1, NULL);
+        break;
+    }
 }
 
 void
@@ -226,12 +239,7 @@ ProcessLinux::RefreshStateAfterStop()
             break;
 
         case ProcessMessage::eExitMessage:
-            SetExitStatus(message.GetExitStatus(), NULL);
-            thread->ExitNotify();
-            break;
-
         case ProcessMessage::eSignalMessage:
-            SetExitStatus(-1, NULL);
             thread->ExitNotify();
             break;
 
@@ -240,7 +248,7 @@ ProcessLinux::RefreshStateAfterStop()
             break;
 
         case ProcessMessage::eBreakpointMessage:
-            thread->BreakNotify(FixupBreakpointPC(thread));
+            thread->BreakNotify();
             break;
         }
     }
@@ -394,20 +402,5 @@ ProcessLinux::UpdateLoadedSections()
             old_load_addr != new_load_addr)
             SectionLoaded(section, new_load_addr);
     }
-}
-
-lldb::break_id_t
-ProcessLinux::FixupBreakpointPC(Thread *thread)
-{
-    // FIXME: This is i386/x86_64 specific.
-    lldb::addr_t pc = thread->GetRegisterContext()->GetPC();
-    assert(pc != LLDB_INVALID_ADDRESS);
-
-    // Sanity check: Ensure we have a valid breakpoint address.
-    lldb::BreakpointSiteSP bp_site = GetBreakpointSiteList().FindByAddress(pc - 1);
-    assert(bp_site && bp_site->ValidForThisThread(thread));
-
-    thread->GetRegisterContext()->SetPC(pc - 1);
-    return bp_site->GetID();
 }
 

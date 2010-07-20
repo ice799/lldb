@@ -257,6 +257,29 @@ ResumeOperation::Execute(ProcessMonitor *monitor)
         m_result = true;
 }
 
+//------------------------------------------------------------------------------
+class SingleStepOperation : public Operation
+{
+public:
+    SingleStepOperation(lldb::tid_t pid, bool &result) 
+        : m_tid(pid), m_result(result) { }
+
+    void Execute(ProcessMonitor *monitor);
+
+private:
+    lldb::tid_t m_tid;
+    bool &m_result;
+};
+
+
+void
+SingleStepOperation::Execute(ProcessMonitor *monitor)
+{
+    if (ptrace(PTRACE_SINGLESTEP, m_tid, NULL, NULL) == -1L)
+        m_result = false;
+    else
+        m_result = true;
+}
 
 //------------------------------------------------------------------------------
 ProcessMonitor::ProcessMonitor(ProcessLinux *process,
@@ -413,6 +436,17 @@ ProcessMonitor::Launch(MonitorArgs *args)
         exit(-1);
     }
 
+    // Wait for the child process to to trap on its call to execve.
+    int status;
+    if ((status = waitpid(pid, &status, 0)) < 0)
+        return false;           // execve likely failed for some reason.
+    assert(status == pid && "Could not sync with inferrior process.");
+
+    // Have the child raise an event on exit.  This is used to keep the child in
+    // limbo until it is destroyed.
+    if (ptrace(PTRACE_SETOPTIONS, pid, NULL, PTRACE_O_TRACEEXIT) < 0)
+        return false;
+    
     // Release the master terminal descriptor and pass it off to the
     // ProcessMonitor instance.  Similarly stash the inferior pid.
     monitor->m_terminal_fd = terminal.ReleaseMasterFileDescriptor();
@@ -428,6 +462,8 @@ ProcessMonitor::Launch(MonitorArgs *args)
     process.GetThreadList().AddThread(inferior);
     process.GetThreadList().SetCurrentThreadByID(pid);
 
+     // Notify the process instance it has stopped.
+    process.SendMessage(ProcessMessage::Trace(pid));
     return true;
 }
 
@@ -500,6 +536,21 @@ ProcessMonitor::ServeSIGCHLD(ProcessMonitor *monitor,
             assert(false && "Unexpected SIGTRAP code!");
             break;
 
+           
+        case (SIGTRAP | (PTRACE_EVENT_EXIT << 8)):
+        {
+            // The inferior process is about to exit.  Maintain the process in a
+            // state of "limbo" until we are explicitly commanded to detatch,
+            // destroy, resume, etc.
+            //
+            // FIXME: Confirm this extracts the correct bits.
+            unsigned long data = 0;
+            if (ptrace(PTRACE_GETEVENTMSG, pid, NULL, &data) < 0)
+                data = -1;
+            message = ProcessMessage::Exit(pid, (data >> 8));
+            break;
+        }
+
         case 0:
         case TRAP_TRACE:
             message = ProcessMessage::Trace(pid);
@@ -567,7 +618,7 @@ READ_AGAIN:
         // If interrupted by a signal handler try again.  Otherwise the monitor
         // thread probably died and we have a stale file descriptor -- abort the
         // operation.
-        if (errno = EINTR)
+        if (errno == EINTR)
             goto READ_AGAIN;
         return;
     }
@@ -619,6 +670,15 @@ ProcessMonitor::Resume()
 {
     bool result;
     ResumeOperation op(result);
+    DoOperation(&op);
+    return result;
+}
+
+bool
+ProcessMonitor::SingleStep(lldb::tid_t tid)
+{
+    bool result;
+    SingleStepOperation op(tid, result);
     DoOperation(&op);
     return result;
 }

@@ -192,8 +192,6 @@ private:
     /// FIXME:  It would probably be better to delegate this task to the
     /// DynamicLoader plugin, when we have one.
     void UpdateLoadedSections();
-
-    lldb::break_id_t FixupBreakpointPC(lldb_private::Thread *thread);
 };
 
 #endif  // liblldb_MacOSXProcess_H_

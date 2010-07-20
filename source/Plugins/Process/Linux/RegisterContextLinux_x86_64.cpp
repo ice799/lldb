@@ -512,5 +512,5 @@ RegisterContextLinux_x86_64::ConvertRegisterKindToRegisterNumber(uint32_t kind,
 bool
 RegisterContextLinux_x86_64::HardwareSingleStep(bool enable)
 {
-    return false;
+    return GetMonitor().SingleStep(GetThreadID());
 }

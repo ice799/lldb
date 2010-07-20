@@ -64,6 +64,9 @@ public:
     bool
     Resume();
 
+    bool
+    SingleStep(lldb::tid_t pid);
+
 private:
     ProcessLinux *m_process;
 

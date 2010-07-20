@@ -419,6 +419,10 @@ ProcessMonitor::Launch(MonitorArgs *args)
     monitor->m_pid = pid;
 
     // Add the new thread of execution to the process instance.
+    //
+    // FIXME: We should implement a synchronization point between the monitor
+    // thread and the context in which ProcessLinux::DoLaunch was called.  The
+    // only reason this code is here is to paper over the need for syncing.
     ProcessLinux &process = monitor->GetProcess();
     lldb::ThreadSP inferior(new LinuxThread(process, pid));
     process.GetThreadList().AddThread(inferior);

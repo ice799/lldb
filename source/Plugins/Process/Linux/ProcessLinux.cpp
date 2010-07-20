@@ -126,8 +126,9 @@ ProcessLinux::DoLaunch(Module *module,
                        const char *stdout_path,
                        const char *stderr_path)
 {
+    // FIXME: Implement a syncronization point between this thread and the
+    // monitor thread.
     Error error;
-
     assert(m_monitor == NULL);
 
     SetPrivateState(eStateLaunching);

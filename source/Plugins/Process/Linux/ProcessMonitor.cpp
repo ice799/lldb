@@ -537,7 +537,7 @@ ProcessMonitor::ServeOp(ProcessMonitor *monitor)
         if ((status = read(fdset.fd, &op, sizeof(op))) < 0)
         {
             // There is only one acceptable failure.
-            assert(errno = EINTR);
+            assert(errno == EINTR);
             goto READ_AGAIN;
         }
 

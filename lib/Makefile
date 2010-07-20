@@ -33,7 +33,6 @@ USEDLIBS = lldbAPI.a \
 	lldbPluginObjectFileELF.a \
 	lldbPluginSymbolFileDWARF.a \
 	lldbPluginSymbolFileSymtab.a \
-	lldbPluginSymbolVendorMacOSX.a \
 	lldbSymbol.a \
 	lldbTarget.a \
 	lldbUtility.a \
@@ -65,11 +64,13 @@ ifeq ($(HOST_OS),Darwin)
               lldbPluginObjectContainerUniversalMachO.a \
               lldbPluginObjectFileMachO.a \
               lldbPluginProcessGDBRemote.a \
-              lldbPluginUtility.a
+              lldbPluginUtility.a \
+              lldbPluginSymbolVendorMacOSX.a
 endif
 
 ifeq ($(HOST_OS),Linux)
-  USEDLIBS += lldbHostLinux.a
+  USEDLIBS += lldbHostLinux.a \
+              lldbPluginProcessLinux.a
 endif
 
 include $(LEVEL)/Makefile.common
@@ -102,6 +103,6 @@ ifeq ($(HOST_OS), Linux)
                        -Wl,--no-whole-archive
     # Don't allow unresolved symbols.
     LLVMLibsOptions += -Wl,--no-undefined
-    # Link in python
-    LD.Flags += -lpython2.6
+    # Link in python and the realtime library.
+    LD.Flags += -lpython2.6 -lrt
 endif

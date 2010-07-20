@@ -66,17 +66,14 @@ public:
 
 private:
     ProcessLinux *m_process;
-    lldb_private::Mutex m_mutex_in;
-    lldb::condition_t m_cond_in;
-
-    lldb_private::Mutex m_mutex_out;
-    lldb::condition_t m_cond_out;
 
     lldb::thread_t m_thread;
     lldb::pid_t m_pid;
     int m_terminal_fd;
 
-    Operation *m_op;
+    lldb_private::Mutex m_server_mutex;
+    int m_client_fd;
+    int m_server_fd;
 
     struct MonitorArgs
     {
@@ -100,6 +97,9 @@ private:
 
     static bool
     Launch(MonitorArgs *args);
+
+    static bool
+    EnableIPC(ProcessMonitor *monitor);
 
     static void
     Serve(ProcessMonitor *monitor);

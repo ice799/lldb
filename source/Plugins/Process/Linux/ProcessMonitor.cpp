@@ -8,9 +8,11 @@
 //===----------------------------------------------------------------------===//
 
 #include <errno.h>
+#include <poll.h>
 #include <string.h>
 #include <unistd.h>
 #include <sys/ptrace.h>
+#include <sys/socket.h>
 #include <sys/types.h>
 #include <sys/wait.h>
 
@@ -266,10 +268,11 @@ ProcessMonitor::ProcessMonitor(ProcessLinux *process,
                                const char *stderr_path,
                                lldb_private::Error &error)
     : m_process(process),
-      m_mutex_in(Mutex::eMutexTypeNormal),
-      m_mutex_out(Mutex::eMutexTypeNormal),
       m_thread(LLDB_INVALID_HOST_THREAD),
-      m_op(NULL)
+      m_pid(LLDB_INVALID_PROCESS_ID),
+      m_terminal_fd(-1),
+      m_client_fd(-1),
+      m_server_fd(-1)
 {
     MonitorArgs *args = new MonitorArgs();
 
@@ -302,9 +305,6 @@ ProcessMonitor::ProcessMonitor(ProcessLinux *process,
     args->stdout_path = NULL;
     args->stderr_path = NULL;
 
-    pthread_cond_init(&m_cond_in, NULL);
-    pthread_cond_init(&m_cond_out, NULL);
-
     StartMonitor(args, error);
 }
 
@@ -334,6 +334,10 @@ ProcessMonitor::StopMonitor()
 
     Host::ThreadCancel(m_thread, NULL);
     Host::ThreadJoin(m_thread, &result, NULL);
+
+    close(m_terminal_fd);
+    close(m_client_fd);
+    close(m_server_fd);
 }
 
 void *
@@ -365,6 +369,10 @@ ProcessMonitor::Launch(MonitorArgs *args)
 
     // Pseudo terminal setup.
     if (!terminal.OpenFirstAvailableMaster(O_RDWR | O_NOCTTY, err_str, err_len))
+        return false;
+
+    // Server/client descriptors.
+    if (!EnableIPC(monitor))
         return false;
 
     if ((pid = terminal.Fork(err_str, err_len)) < 0)
@@ -416,6 +424,19 @@ ProcessMonitor::Launch(MonitorArgs *args)
     process.GetThreadList().AddThread(inferior);
     process.GetThreadList().SetCurrentThreadByID(pid);
 
+    return true;
+}
+
+bool
+ProcessMonitor::EnableIPC(ProcessMonitor *monitor)
+{
+    int fd[2];
+
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, fd))
+        return false;
+
+    monitor->m_client_fd = fd[0];
+    monitor->m_server_fd = fd[1];
     return true;
 }
 
@@ -496,48 +517,59 @@ ProcessMonitor::ServeSIGCHLD(ProcessMonitor *monitor,
 void
 ProcessMonitor::ServeOp(ProcessMonitor *monitor)
 {
-    int status = 0;
-    timespec ts;
+    int status;
+    pollfd fdset;
 
-    // Process operations over a 0.5 second window.
-    clock_gettime(CLOCK_REALTIME, &ts);
-    ts.tv_nsec += 50000000;
+    fdset.fd = monitor->m_server_fd;
+    fdset.events = POLLIN | POLLPRI;
+    fdset.revents = 0;
 
-    monitor->m_mutex_in.Lock();
-    while (monitor->m_op == NULL && status == 0)
-        status = pthread_cond_timedwait(
-            &monitor->m_cond_in, monitor->m_mutex_in.GetMutex(), &ts);
+    status = poll(&fdset, 1, 1000);
 
-    if (status == 0) {
-        monitor->m_op->Execute(monitor);
-        monitor->m_mutex_out.Lock();
-        monitor->m_mutex_in.Unlock();
-        pthread_cond_signal(&monitor->m_cond_out);
-        monitor->m_op = NULL;
-        monitor->m_mutex_out.Unlock();
+    if (status == 0)
+        return;
+
+    if (fdset.revents & POLLIN) 
+    {
+        Operation *op = NULL;
+
+    READ_AGAIN:
+        if ((status = read(fdset.fd, &op, sizeof(op))) < 0)
+        {
+            // There is only one acceptable failure.
+            assert(errno = EINTR);
+            goto READ_AGAIN;
+        }
+
+        assert(status == sizeof(op));
+        op->Execute(monitor);
+        write(fdset.fd, &op, sizeof(op));
     }
-    else
-        monitor->m_mutex_in.Unlock();
- }
+}
 
 void
 ProcessMonitor::DoOperation(Operation *op)
 {
-   int status = 0;
+    int status;
+    Operation *ack = NULL;
+    Mutex::Locker lock(m_server_mutex);
+    
+    // FIXME: Do proper error checking here.
+    write(m_client_fd, &op, sizeof(op));
 
-   m_mutex_in.Lock();
-   assert(m_op == NULL && "Inconsistent state.");
-   if (pthread_cond_signal(&m_cond_in))
-       perror("pthread_cond_signal DoOperation");
-   m_op = op;
-   m_mutex_out.Lock();
-   m_mutex_in.Unlock();
+READ_AGAIN:
+    if ((status = read(m_client_fd, &ack, sizeof(ack))) < 0)
+    {
+        // If interrupted by a signal handler try again.  Otherwise the monitor
+        // thread probably died and we have a stale file descriptor -- abort the
+        // operation.
+        if (errno = EINTR)
+            goto READ_AGAIN;
+        return;
+    }
 
-   while (m_op != NULL && status == 0)
-       status = pthread_cond_wait(&m_cond_out, m_mutex_out.GetMutex());
-
-   assert(status == 0 && "Did not get response!");
-   m_mutex_out.Unlock();
+    assert(status == sizeof(ack));
+    assert(ack == op && "Invalid monitor thread response!");
 }
 
 size_t

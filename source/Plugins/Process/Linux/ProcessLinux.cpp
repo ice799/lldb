@@ -145,8 +145,11 @@ ProcessLinux::DoLaunch(Module *module,
 Error
 ProcessLinux::DoResume()
 {
-    Error result;
     assert(GetPrivateState() == eStateStopped && "Bad state for DoResume!");
+
+    // Set our state to running.  This ensures inferior threads do not post a
+    // state change first.
+    SetPrivateState(eStateRunning);
 
     bool did_resume = false;
     uint32_t thread_count = m_thread_list.GetSize(false);
@@ -156,13 +159,9 @@ ProcessLinux::DoResume()
             m_thread_list.GetThreadAtIndex(i, false).get());
         did_resume = thread->Resume() || did_resume;
     }
+    assert(did_resume && "Process resume failed!");
 
-    if (!did_resume)
-        result.SetErrorToGenericError();
-    else
-        SetPrivateState(eStateRunning);
-
-    return result;
+    return Error();
 }
 
 Error
@@ -197,7 +196,7 @@ void
 ProcessLinux::SendMessage(const ProcessMessage &message)
 {
     Mutex::Locker lock(m_message_mutex);
-    m_message_queue.push_back(message);
+    m_message_queue.push(message);
 
     switch (message.GetKind())
     {
@@ -218,42 +217,38 @@ ProcessLinux::SendMessage(const ProcessMessage &message)
 void
 ProcessLinux::RefreshStateAfterStop()
 {
+    Mutex::Locker lock(m_message_mutex);
     if (m_message_queue.empty())
         return;
 
-    typedef std::vector<ProcessMessage>::iterator iterator;
-    for (iterator I = m_message_queue.begin(), E = m_message_queue.end();
-         I != E; ++I)
+    ProcessMessage &message = m_message_queue.front();
+
+    // Resolve the thread this message corresponds to.
+    lldb::pid_t pid = message.GetPID();
+    LinuxThread *thread = static_cast<LinuxThread*>(
+        GetThreadList().FindThreadByID(pid, false).get());
+    
+    switch (message.GetKind())
     {
-        ProcessMessage &message = *I;
-
-        // Resolve the thread this message corresponds to.
-        lldb::pid_t pid = message.GetPID();
-        LinuxThread *thread = static_cast<LinuxThread*>(
-            GetThreadList().FindThreadByID(pid, false).get());
-
-        switch (message.GetKind())
-        {
-        default:
-            assert(false && "Unexpected message kind!");
-            break;
-
-        case ProcessMessage::eExitMessage:
-        case ProcessMessage::eSignalMessage:
-            thread->ExitNotify();
-            break;
-
-        case ProcessMessage::eTraceMessage:
-            thread->TraceNotify();
-            break;
-
-        case ProcessMessage::eBreakpointMessage:
-            thread->BreakNotify();
-            break;
-        }
+    default:
+        assert(false && "Unexpected message kind!");
+        break;
+        
+    case ProcessMessage::eExitMessage:
+    case ProcessMessage::eSignalMessage:
+        thread->ExitNotify();
+        break;
+        
+    case ProcessMessage::eTraceMessage:
+        thread->TraceNotify();
+        break;
+        
+    case ProcessMessage::eBreakpointMessage:
+        thread->BreakNotify();
+        break;
     }
 
-    m_message_queue.clear();
+    m_message_queue.pop();
 }
 
 bool

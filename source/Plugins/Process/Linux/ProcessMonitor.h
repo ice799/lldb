@@ -62,15 +62,22 @@ public:
     WriteRegisterValue(unsigned offset, const lldb_private::Scalar &value);
 
     bool
+    GetSignalInfo(lldb::tid_t tid, void *siginfo);
+
+    bool
+    GetEventMessage(lldb::tid_t tid, unsigned long *message);
+
+    bool
     Resume();
 
     bool
-    SingleStep(lldb::tid_t pid);
+    SingleStep(lldb::tid_t tid);
 
 private:
     ProcessLinux *m_process;
 
-    lldb::thread_t m_thread;
+    lldb::thread_t m_operation_thread;
+    lldb::thread_t m_signal_thread;
     lldb::pid_t m_pid;
     int m_terminal_fd;
 
@@ -78,7 +85,7 @@ private:
     int m_client_fd;
     int m_server_fd;
 
-    struct MonitorArgs
+    struct LaunchArgs
     {
         ProcessMonitor *monitor;
         lldb_private::Module *module;
@@ -90,35 +97,37 @@ private:
     };
 
     void
-    StartMonitor(MonitorArgs *args, lldb_private::Error &error);
+    StartOperationThread(LaunchArgs *args, lldb_private::Error &error);
 
     void
-    StopMonitor();
+    StopOperationThread();
+
+    static bool
+    StartSignalThread(ProcessMonitor *monitor);
+
+    void
+    StopSignalThread();
 
     static void *
-    MonitorThread(void *arg);
+    OperationThread(void *arg);
+
+    static void *
+    SignalThread(void *arg);
 
     static bool
-    Launch(MonitorArgs *args);
+    Launch(LaunchArgs *args);
 
-    static bool
-    EnableIPC(ProcessMonitor *monitor);
+    bool
+    EnableIPC();
 
     static void
-    Serve(ProcessMonitor *monitor);
-
-    static bool
-    ServeSIGCHLD(ProcessMonitor *monitor, lldb::pid_t pid, int status);
-
-    static void
-    ServeOp(ProcessMonitor *monitor);
+    ServeOperation(ProcessMonitor *monitor);
 
     static bool
     DupDescriptor(const char *path, int fd, int flags);
 
     void
     DoOperation(Operation *op);
-
 };
 
 #endif // #ifndef liblldb_ProcessMonitor_H_

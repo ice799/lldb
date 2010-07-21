@@ -13,7 +13,7 @@
 // C Includes
 
 // C++ Includes
-#include <vector>
+#include <queue>
 
 // Other libraries and framework includes
 #include "lldb/Target/Process.h"
@@ -185,7 +185,7 @@ private:
     ProcessMonitor *m_monitor;
 
     lldb_private::Mutex m_message_mutex;
-    std::vector<ProcessMessage> m_message_queue;
+    std::queue<ProcessMessage> m_message_queue;
 
     /// Updates the loaded sections provided by the executable.
     ///

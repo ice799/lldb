@@ -1,4 +1,4 @@
-//===-- RegisterContextLinux_x86_64.h   -------------------------*- C++ -*-===//
+//===-- RegisterContext_x86_64.h --------------------------------*- C++ -*-===//
 //
 //                     The LLVM Compiler Infrastructure
 //
@@ -10,15 +10,15 @@
 // FIXME: We should have a generic register context definition that can be
 // shared among all plugins.  This is a near duplicate of the mac code.
 
-#ifndef liblldb_RegisterContextLinux_x86_64_H_
-#define liblldb_RegisterContextLinux_x86_64_H_
+#ifndef liblldb_RegisterContext_x86_64_H_
+#define liblldb_RegisterContext_x86_64_H_
 
-#include "lldb/Target/X86/RegisterContext_x86_64.h"
+#include "lldb/Target/RegisterContext.h"
 
 class ProcessMonitor;
 
 class RegisterContextLinux_x86_64
-    : public lldb_private::RegisterContext_x86_64
+    : public lldb_private::RegisterContext
 {
 public:
     RegisterContextLinux_x86_64(lldb_private::Thread &thread,
@@ -29,8 +29,17 @@ public:
     void
     Invalidate();
 
+    size_t
+    GetRegisterCount();
+
     const lldb::RegisterInfo *
     GetRegisterInfoAtIndex(uint32_t reg);
+
+    size_t
+    GetRegisterSetCount();
+
+    const lldb::RegisterSet *
+    GetRegisterSet(uint32_t set);
 
     bool
     ReadRegisterValue(uint32_t reg, lldb_private::Scalar &value);
@@ -50,6 +59,9 @@ public:
 
     bool
     WriteAllRegisterValues(const lldb::DataBufferSP &data_sp);
+
+    uint32_t
+    ConvertRegisterKindToRegisterNumber(uint32_t kind, uint32_t num);
 
     bool
     HardwareSingleStep(bool enable);

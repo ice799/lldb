@@ -10,18 +10,18 @@
 #ifndef liblldb_RegisterContext_x86_64_H_
 #define liblldb_RegisterContext_x86_64_H_
 
-#include "lldb/Target/RegisterContext.h"
+#include "RegisterContextLinux.h"
 
 class ProcessMonitor;
 
-class RegisterContextLinux_x86_64
-    : public lldb_private::RegisterContext
+class RegisterContext_x86_64
+    : public RegisterContextLinux
 {
 public:
-    RegisterContextLinux_x86_64(lldb_private::Thread &thread,
-                                lldb_private::StackFrame *frame);
+    RegisterContext_x86_64(lldb_private::Thread &thread,
+                           lldb_private::StackFrame *frame);
 
-    ~RegisterContextLinux_x86_64();
+    ~RegisterContext_x86_64();
 
     void
     Invalidate();
@@ -62,6 +62,9 @@ public:
 
     bool
     HardwareSingleStep(bool enable);
+
+    bool
+    UpdateAfterBreakpoint();
 
     struct GPR
     {

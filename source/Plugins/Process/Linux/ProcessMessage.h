@@ -31,27 +31,27 @@ public:
 
     ProcessMessage()
         : m_kind(eInvalidMessage),
-          m_pid(LLDB_INVALID_PROCESS_ID),
+          m_tid(LLDB_INVALID_PROCESS_ID),
           m_data(0) { }
 
     Kind GetKind() const { return m_kind; }
 
-    lldb::pid_t GetPID() const { return m_pid; }
+    lldb::tid_t GetTID() const { return m_tid; }
 
-    static ProcessMessage Exit(lldb::pid_t pid, int status) {
-        return ProcessMessage(pid, eExitMessage, status);
+    static ProcessMessage Exit(lldb::tid_t tid, int status) {
+        return ProcessMessage(tid, eExitMessage, status);
     }
 
-    static ProcessMessage Signal(lldb::pid_t pid, int signum) {
-        return ProcessMessage(pid, eSignalMessage, signum);
+    static ProcessMessage Signal(lldb::tid_t tid, int signum) {
+        return ProcessMessage(tid, eSignalMessage, signum);
     }
 
-    static ProcessMessage Trace(lldb::pid_t pid) {
-        return ProcessMessage(pid, eTraceMessage);
+    static ProcessMessage Trace(lldb::tid_t tid) {
+        return ProcessMessage(tid, eTraceMessage);
     }
 
-    static ProcessMessage Break(lldb::pid_t pid) {
-        return ProcessMessage(pid, eBreakpointMessage);
+    static ProcessMessage Break(lldb::tid_t tid) {
+        return ProcessMessage(tid, eBreakpointMessage);
     }
 
     int GetExitStatus() const {
@@ -70,13 +70,13 @@ public:
     }
 
 private:
-    ProcessMessage(lldb::pid_t pid, Kind kind, int data = 0)
+    ProcessMessage(lldb::tid_t tid, Kind kind, int data = 0)
         : m_kind(kind),
-          m_pid(pid),
+          m_tid(tid),
           m_data(data) { }
 
     Kind m_kind;
-    lldb::pid_t m_pid;
+    lldb::tid_t m_tid;
     int m_data;
 };
 

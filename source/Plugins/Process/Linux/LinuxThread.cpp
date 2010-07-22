@@ -15,7 +15,7 @@
 #include "LinuxThread.h"
 #include "ProcessLinux.h"
 #include "ProcessMonitor.h"
-#include "RegisterContextLinux_x86_64.h"
+#include "RegisterContext_x86_64.h"
 
 using namespace lldb_private;
 
@@ -33,7 +33,7 @@ LinuxThread::LinuxThread(Process &process, lldb::tid_t tid)
         break;
 
     case ArchSpec::eCPU_x86_64:
-        m_register_ap.reset(new RegisterContextLinux_x86_64(*this, NULL));
+        m_register_ap.reset(new RegisterContext_x86_64(*this, NULL));
         break;
     }
 }
@@ -67,7 +67,7 @@ LinuxThread::GetStackFrameAtIndex(uint32_t idx)
 {
     if (idx == 0)
     {
-        RegisterContext *regs = GetRegisterContext();
+        RegisterContextLinux *regs = GetRegisterContext();
         StackFrame *frame = new StackFrame(
             idx, *this, regs->GetFP(), regs->GetPC());
         return lldb::StackFrameSP(frame);
@@ -76,7 +76,7 @@ LinuxThread::GetStackFrameAtIndex(uint32_t idx)
         return lldb::StackFrameSP();
 }
 
-RegisterContext *
+RegisterContextLinux *
 LinuxThread::GetRegisterContext()
 {
     return m_register_ap.get();
@@ -94,10 +94,10 @@ LinuxThread::RestoreSaveFrameZero(const RegisterCheckpoint &checkpoint)
     return false;
 }
 
-lldb_private::RegisterContext *
+RegisterContextLinux *
 LinuxThread::CreateRegisterContextForFrame(lldb_private::StackFrame *frame)
 {
-    return new RegisterContextLinux_x86_64(*this, frame);
+    return new RegisterContext_x86_64(*this, frame);
 }
 
 bool
@@ -165,15 +165,17 @@ LinuxThread::Resume()
 void
 LinuxThread::BreakNotify()
 {
-    // Resolve the breakpoint corresponding to our current PC.
-    //
-    // FIXME: This is i386/x86_64 specific. When we hit a breakpoint the current
-    // PC points one past the actual breakpoint address.
-    lldb::addr_t pc = GetRegisterContext()->GetPC() - 1;
+    bool status;
+
+    status = GetRegisterContext()->UpdateAfterBreakpoint();
+    assert(status && "Breakpoint update failed!");
+
+    // With our register state restored, resolve the breakpoint object
+    // corresponding to our current PC.
+    lldb::addr_t pc = GetRegisterContext()->GetPC();
     lldb::BreakpointSiteSP bp_site = 
         GetProcess().GetBreakpointSiteList().FindByAddress(pc);
     assert(bp_site && bp_site->ValidForThisThread(this));
-    GetRegisterContext()->SetPC(pc);
 
     m_note = eBreak;
     m_breakpoint = bp_site;

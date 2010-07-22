@@ -14,6 +14,8 @@
 
 #include "lldb/Target/Thread.h"
 
+#include "RegisterContextLinux.h"
+
 class ProcessMonitor;
 
 //------------------------------------------------------------------------------
@@ -40,7 +42,7 @@ public:
     lldb::StackFrameSP
     GetStackFrameAtIndex(uint32_t idx);
 
-    lldb_private::RegisterContext *
+    RegisterContextLinux *
     GetRegisterContext();
 
     bool
@@ -49,7 +51,7 @@ public:
     bool
     RestoreSaveFrameZero(const RegisterCheckpoint &checkpoint);
 
-    lldb_private::RegisterContext *
+    RegisterContextLinux *
     CreateRegisterContextForFrame(lldb_private::StackFrame *frame);
 
     bool
@@ -66,7 +68,7 @@ public:
 
 private:
     std::auto_ptr<lldb_private::StackFrame> m_frame_ap;
-    std::auto_ptr<lldb_private::RegisterContext> m_register_ap;
+    std::auto_ptr<RegisterContextLinux> m_register_ap;
 
     lldb::BreakpointSiteSP m_breakpoint;
 

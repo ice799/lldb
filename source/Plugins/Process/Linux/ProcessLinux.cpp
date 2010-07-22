@@ -34,8 +34,6 @@ using namespace lldb_private;
 Process*
 ProcessLinux::CreateInstance(Target& target, Listener &listener)
 {
-    if (GetCurrentProcess())
-        return NULL;
     return new ProcessLinux(target, listener);
 }
 
@@ -71,8 +69,6 @@ ProcessLinux::GetPluginDescriptionStatic()
 }
 
 
-ProcessLinux *ProcessLinux::g_process = NULL;
-
 //------------------------------------------------------------------------------
 // Constructors and destructors.
 
@@ -86,16 +82,10 @@ ProcessLinux::ProcessLinux(Target& target, Listener &listener)
     m_byte_order = obj_file->GetByteOrder();
 
     UpdateLoadedSections();
-
-    assert(g_process == NULL && "Inconsistent process state!");
-    g_process = this;
 }
 
 ProcessLinux::~ProcessLinux()
 {
-    assert(g_process == this && "Inconsistent process state!");
-    g_process = NULL;
-
     delete m_monitor;
 }
 
@@ -185,11 +175,16 @@ ProcessLinux::DoSignal(int signal)
 Error
 ProcessLinux::DoDestroy()
 {
-    if (m_monitor != NULL) {
-        delete m_monitor;
-        m_monitor = NULL;
+    Error error;
+    // Once the kill signal is sent to the inferrior our signal thread will
+    // catch the child termination and update the process state.
+    if (!GetMonitor().KillProcess()) 
+    {
+        error.SetErrorToGenericError();
+        error.SetErrorString("Process termination failed.");
     }
-    return Error();
+
+    return error;
 }
 
 void
@@ -224,9 +219,9 @@ ProcessLinux::RefreshStateAfterStop()
     ProcessMessage &message = m_message_queue.front();
 
     // Resolve the thread this message corresponds to.
-    lldb::pid_t pid = message.GetPID();
+    lldb::tid_t tid = message.GetTID();
     LinuxThread *thread = static_cast<LinuxThread*>(
-        GetThreadList().FindThreadByID(pid, false).get());
+        GetThreadList().FindThreadByID(tid, false).get());
     
     switch (message.GetKind())
     {
@@ -315,12 +310,6 @@ Error
 ProcessLinux::DisableBreakpoint(BreakpointSite *bp_site)
 {
     return DisableSoftwareBreakpoint(bp_site);
-}
-
-Error
-ProcessLinux::EnableSoftwareBreakpoint(BreakpointSite *bp_site)
-{
-    return this->Process::EnableSoftwareBreakpoint(bp_site);
 }
 
 uint32_t

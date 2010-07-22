@@ -122,6 +122,10 @@ public:
     bool
     SingleStep(lldb::tid_t tid);
 
+    /// Kills the inferior process associated with this monitor.
+    bool
+    KillProcess();
+
 private:
     ProcessLinux *m_process;
 

@@ -26,7 +26,6 @@ class ProcessLinux :
     public lldb_private::Process
 {
 public:
-
     //------------------------------------------------------------------
     // Static functions.
     //------------------------------------------------------------------
@@ -155,27 +154,12 @@ public:
     //--------------------------------------------------------------------------
     // ProcessLinux internal API.
 
-    // Returns the current process or NULL if there is no active process.
-    static ProcessLinux *GetCurrentProcess() {
-        return g_process;
-    }
-
-    // FIXME: We should not need this.  Just for tracing.
-    lldb_private::Error
-    EnableSoftwareBreakpoint(lldb_private::BreakpointSite *bp_site);
-
     /// Registers the given message with this process.
     void SendMessage(const ProcessMessage &message);
 
     ProcessMonitor &GetMonitor() { return *m_monitor; }
 
 private:
-    /// The one and only process object.
-    ///
-    /// If we wish to handle more than one process this can be the head of a
-    /// linked list of active processes.
-    static ProcessLinux *g_process;
-
     /// Target byte order.
     ///
     /// FIXME: This member should go away.

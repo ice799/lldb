@@ -16,7 +16,7 @@
 
 #include "ProcessLinux.h"
 #include "ProcessMonitor.h"
-#include "RegisterContextLinux_x86_64.h"
+#include "RegisterContext_x86_64.h"
 
 using namespace lldb_private;
 
@@ -93,13 +93,13 @@ enum
 
 // Computes the offset of the given GPR in the user data area.
 #define GPR_OFFSET(regname) \
-    (offsetof(RegisterContextLinux_x86_64::UserArea, regs) + \
-     offsetof(RegisterContextLinux_x86_64::GPR, regname))
+    (offsetof(RegisterContext_x86_64::UserArea, regs) + \
+     offsetof(RegisterContext_x86_64::GPR, regname))
 
 // Computes the offset of the given FPR in the user data area.
 #define FPR_OFFSET(regname) \
-    (offsetof(RegisterContextLinux_x86_64::UserArea, i387) + \
-     offsetof(RegisterContextLinux_x86_64::FPU, regname))
+    (offsetof(RegisterContext_x86_64::UserArea, i387) + \
+     offsetof(RegisterContext_x86_64::FPU, regname))
 
 // The following lookup table converts register numbers to offsets in the user
 // area.
@@ -276,99 +276,112 @@ static unsigned GetRegOffset(unsigned reg)
     return g_register_offsets[reg];
 }
 
-RegisterContextLinux_x86_64::RegisterContextLinux_x86_64(Thread &thread,
-                                                         StackFrame *frame)
- : RegisterContext(thread, frame)
+RegisterContext_x86_64::RegisterContext_x86_64(Thread &thread,
+                                               StackFrame *frame)
+    : RegisterContextLinux(thread, frame)
 {
 }
 
-RegisterContextLinux_x86_64::~RegisterContextLinux_x86_64()
+RegisterContext_x86_64::~RegisterContext_x86_64()
 {
 }
 
 ProcessMonitor &
-RegisterContextLinux_x86_64::GetMonitor()
+RegisterContext_x86_64::GetMonitor()
 {
     ProcessLinux *process = static_cast<ProcessLinux*>(CalculateProcess());
     return process->GetMonitor();
 }
 
 void
-RegisterContextLinux_x86_64::Invalidate()
+RegisterContext_x86_64::Invalidate()
 {
 }
 
 size_t
-RegisterContextLinux_x86_64::GetRegisterCount()
+RegisterContext_x86_64::GetRegisterCount()
 {
     return 0;
 }
 
 const lldb::RegisterInfo *
-RegisterContextLinux_x86_64::GetRegisterInfoAtIndex(uint32_t reg)
+RegisterContext_x86_64::GetRegisterInfoAtIndex(uint32_t reg)
 {
     return NULL;
 }
 
 size_t
-RegisterContextLinux_x86_64::GetRegisterSetCount()
+RegisterContext_x86_64::GetRegisterSetCount()
 {
     return 0;
 }
 
 const lldb::RegisterSet *
-RegisterContextLinux_x86_64::GetRegisterSet(uint32_t set)
+RegisterContext_x86_64::GetRegisterSet(uint32_t set)
 {
     return NULL;
 }
 
 bool
-RegisterContextLinux_x86_64::ReadRegisterValue(uint32_t reg,
-                                               Scalar &value)
+RegisterContext_x86_64::ReadRegisterValue(uint32_t reg,
+                                          Scalar &value)
 {
     ProcessMonitor &monitor = GetMonitor();
     return monitor.ReadRegisterValue(GetRegOffset(reg), value);
 }
 
 bool
-RegisterContextLinux_x86_64::ReadRegisterBytes(uint32_t reg,
-                                               DataExtractor &data)
+RegisterContext_x86_64::ReadRegisterBytes(uint32_t reg,
+                                          DataExtractor &data)
 {
     return false;
 }
 
 bool
-RegisterContextLinux_x86_64::ReadAllRegisterValues(lldb::DataBufferSP &data_sp)
+RegisterContext_x86_64::ReadAllRegisterValues(lldb::DataBufferSP &data_sp)
 {
     return false;
 }
 
 bool
-RegisterContextLinux_x86_64::WriteRegisterValue(uint32_t reg,
-                                                const Scalar &value)
+RegisterContext_x86_64::WriteRegisterValue(uint32_t reg,
+                                           const Scalar &value)
 {
     ProcessMonitor &monitor = GetMonitor();
     return monitor.WriteRegisterValue(GetRegOffset(reg), value);
 }
 
 bool
-RegisterContextLinux_x86_64::WriteRegisterBytes(uint32_t reg,
-                                                DataExtractor &data,
-                                                uint32_t data_offset)
+RegisterContext_x86_64::WriteRegisterBytes(uint32_t reg,
+                                           DataExtractor &data,
+                                           uint32_t data_offset)
 {
     return false;
 }
 
 bool
-RegisterContextLinux_x86_64::WriteAllRegisterValues(
+RegisterContext_x86_64::WriteAllRegisterValues(
     const lldb::DataBufferSP &data_sp)
 {
     return false;
 }
 
+bool
+RegisterContext_x86_64::UpdateAfterBreakpoint()
+{
+    // PC points one byte past the int3 responsible for the breakpoint.
+    lldb::addr_t pc;
+
+    if ((pc = GetPC()) == LLDB_INVALID_ADDRESS)
+        return false;
+
+    SetPC(pc - 1);
+    return true;
+}
+
 uint32_t
-RegisterContextLinux_x86_64::ConvertRegisterKindToRegisterNumber(uint32_t kind,
-                                                                 uint32_t num)
+RegisterContext_x86_64::ConvertRegisterKindToRegisterNumber(uint32_t kind,
+                                                            uint32_t num)
 {
     if (kind == lldb::eRegisterKindGeneric)
     {
@@ -510,7 +523,7 @@ RegisterContextLinux_x86_64::ConvertRegisterKindToRegisterNumber(uint32_t kind,
 }
 
 bool
-RegisterContextLinux_x86_64::HardwareSingleStep(bool enable)
+RegisterContext_x86_64::HardwareSingleStep(bool enable)
 {
     return GetMonitor().SingleStep(GetThreadID());
 }

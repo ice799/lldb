@@ -358,6 +358,30 @@ EventMessageOperation::Execute(ProcessMonitor *monitor)
 }
 
 //------------------------------------------------------------------------------
+/// @class KillOperation
+/// @brief Implements ProcessMonitor::KillProcess.
+class KillOperation : public Operation
+{
+public:
+    KillOperation(bool &result) : m_result(result) { }
+
+    void Execute(ProcessMonitor *monitor);
+
+private:
+    bool &m_result;
+};
+
+void
+KillOperation::Execute(ProcessMonitor *monitor)
+{
+    lldb::pid_t pid = monitor->GetPID();
+    if (ptrace(PTRACE_KILL, pid, NULL, NULL) == -1L)
+        m_result = false;
+    else
+        m_result = true;
+}
+
+//------------------------------------------------------------------------------
 /// The basic design of the ProcessMonitor is built around two threads.  
 ///
 /// One thread (@see SignalThread) simply blocks on a call to waitpid() looking
@@ -798,6 +822,15 @@ ProcessMonitor::SingleStep(lldb::tid_t tid)
 {
     bool result;
     SingleStepOperation op(tid, result);
+    DoOperation(&op);
+    return result;
+}
+
+bool
+ProcessMonitor::KillProcess()
+{
+    bool result;
+    KillOperation op(result);
     DoOperation(&op);
     return result;
 }

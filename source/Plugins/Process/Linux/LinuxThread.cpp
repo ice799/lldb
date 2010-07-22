@@ -149,7 +149,7 @@ LinuxThread::Resume()
 
     case lldb::eStateRunning:
         SetState(resume_state);
-        status = monitor.Resume();
+        status = monitor.Resume(GetID());
         break;
 
     case lldb::eStateStepping:

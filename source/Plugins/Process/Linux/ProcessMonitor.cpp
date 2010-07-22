@@ -29,6 +29,11 @@
 
 using namespace lldb_private;
 
+//------------------------------------------------------------------------------
+// Static implementations of ProcessMonitor::ReadMemory and
+// ProcessMonitor::WriteMemory.  This enables mutual recursion between these
+// functions without needed to go thru the thread funnel.
+
 static size_t
 DoReadMemory(lldb::pid_t pid, unsigned word_size,
              lldb::addr_t vm_addr, void *buf, size_t size, Error &error)
@@ -107,6 +112,16 @@ DoWriteMemory(lldb::pid_t pid, unsigned word_size,
 
 
 //------------------------------------------------------------------------------
+/// @class Operation
+/// @brief Represents a ProcessMonitor operation.
+///
+/// Under Linux, it is not possible to ptrace() from any other thread but the
+/// one that spawned or attached to the process from the start.  Therefore, when
+/// a ProcessMonitor is asked to deliver or change the state of an inferior
+/// process the operation must be "funneled" to a specific thread to perform the
+/// task.  The Operation class provides an abstract base for all services the
+/// ProcessMonitor must perform via the single virtual function Execute, thus
+/// encapsulating the code to be executed in the privileged context.
 class Operation
 {
 public:
@@ -114,6 +129,8 @@ public:
 };
 
 //------------------------------------------------------------------------------
+/// @class ReadOperation
+/// @brief Implements ProcessMonitor::ReadMemory.
 class ReadOperation : public Operation
 {
 public:
@@ -143,6 +160,8 @@ ReadOperation::Execute(ProcessMonitor *monitor)
 }
 
 //------------------------------------------------------------------------------
+/// @class ReadOperation
+/// @brief Implements ProcessMonitor::WriteMemory.
 class WriteOperation : public Operation
 {
 public:
@@ -172,10 +191,12 @@ WriteOperation::Execute(ProcessMonitor *monitor)
 }
 
 //------------------------------------------------------------------------------
-class ReadRegister : public Operation
+/// @class ReadRegOperation
+/// @brief Implements ProcessMonitor::ReadRegisterValue.
+class ReadRegOperation : public Operation
 {
 public:
-    ReadRegister(unsigned offset, Scalar &value, bool &result)
+    ReadRegOperation(unsigned offset, Scalar &value, bool &result)
         : m_offset(offset), m_value(value), m_result(result)
         { }
 
@@ -188,7 +209,7 @@ private:
 };
 
 void
-ReadRegister::Execute(ProcessMonitor *monitor)
+ReadRegOperation::Execute(ProcessMonitor *monitor)
 {
     lldb::pid_t pid = monitor->GetPID();
 
@@ -206,10 +227,12 @@ ReadRegister::Execute(ProcessMonitor *monitor)
 }
 
 //------------------------------------------------------------------------------
-class WriteRegister : public Operation
+/// @class WriteRegOperation
+/// @brief Implements ProcessMonitor::WriteRegisterValue.
+class WriteRegOperation : public Operation
 {
 public:
-    WriteRegister(unsigned offset, const Scalar &value, bool &result)
+    WriteRegOperation(unsigned offset, const Scalar &value, bool &result)
         : m_offset(offset), m_value(value), m_result(result)
         { }
 
@@ -222,7 +245,7 @@ private:
 };
 
 void
-WriteRegister::Execute(ProcessMonitor *monitor)
+WriteRegOperation::Execute(ProcessMonitor *monitor)
 {
     lldb::pid_t pid = monitor->GetPID();
 
@@ -233,29 +256,33 @@ WriteRegister::Execute(ProcessMonitor *monitor)
 }
 
 //------------------------------------------------------------------------------
+/// @class ResumeOperation
+/// @brief Implements ProcessMonitor::Resume.
 class ResumeOperation : public Operation
 {
 public:
-    ResumeOperation(bool &result) : m_result(result) { }
+    ResumeOperation(lldb::tid_t tid, bool &result) : 
+        m_tid(tid), m_result(result) { }
 
     void Execute(ProcessMonitor *monitor);
 
 private:
+    lldb::tid_t m_tid;
     bool &m_result;
 };
 
 void
 ResumeOperation::Execute(ProcessMonitor *monitor)
 {
-    lldb::pid_t pid = monitor->GetPID();
-
-    if (ptrace(PTRACE_CONT, pid, NULL, NULL) == -1L)
+    if (ptrace(PTRACE_CONT, m_tid, NULL, NULL) == -1L)
         m_result = false;
     else
         m_result = true;
 }
 
 //------------------------------------------------------------------------------
+/// @class ResumeOperation
+/// @brief Implements ProcessMonitor::SingleStep.
 class SingleStepOperation : public Operation
 {
 public:
@@ -279,6 +306,8 @@ SingleStepOperation::Execute(ProcessMonitor *monitor)
 }
 
 //------------------------------------------------------------------------------
+/// @class SiginfoOperation
+/// @brief Implements ProcessMonitor::GetSignalInfo.
 class SiginfoOperation : public Operation
 {
 public:
@@ -303,6 +332,8 @@ SiginfoOperation::Execute(ProcessMonitor *monitor)
 }
 
 //------------------------------------------------------------------------------
+/// @class EventMessageOperation
+/// @brief Implements ProcessMonitor::GetEventMessage.
 class EventMessageOperation : public Operation
 {
 public:
@@ -327,6 +358,17 @@ EventMessageOperation::Execute(ProcessMonitor *monitor)
 }
 
 //------------------------------------------------------------------------------
+/// The basic design of the ProcessMonitor is built around two threads.  
+///
+/// One thread (@see SignalThread) simply blocks on a call to waitpid() looking
+/// for changes in the debugee state.  When a change is detected a
+/// ProcessMessage is sent to the associated ProcessLinux instance.  This thread
+/// "drives" state changes in the debugger.
+///
+/// The second thread (@see OperationThread) is responsible for two things 1)
+/// lauching or attaching to the inferior process, and then 2) servicing
+/// operations such as register reads/writes, stepping, etc.  See the comments
+/// on the Operation class for more info as to why this is needed.
 ProcessMonitor::ProcessMonitor(ProcessLinux *process,
                                Module *module,
                                const char *argv[],
@@ -391,6 +433,8 @@ ProcessMonitor::~ProcessMonitor()
     close(m_server_fd);
 }
 
+//------------------------------------------------------------------------------
+// Thread setup and tear down.
 void
 ProcessMonitor::StartOperationThread(LaunchArgs *args, Error &error)
 {
@@ -726,7 +770,7 @@ bool
 ProcessMonitor::ReadRegisterValue(unsigned offset, Scalar &value)
 {
     bool result;
-    ReadRegister op(offset, value, result);
+    ReadRegOperation op(offset, value, result);
     DoOperation(&op);
     return result;
 }
@@ -735,16 +779,16 @@ bool
 ProcessMonitor::WriteRegisterValue(unsigned offset, const Scalar &value)
 {
     bool result;
-    WriteRegister op(offset, value, result);
+    WriteRegOperation op(offset, value, result);
     DoOperation(&op);
     return result;
 }
 
 bool
-ProcessMonitor::Resume()
+ProcessMonitor::Resume(lldb::tid_t tid)
 {
     bool result;
-    ResumeOperation op(result);
+    ResumeOperation op(tid, result);
     DoOperation(&op);
     return result;
 }

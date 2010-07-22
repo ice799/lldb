@@ -7,9 +7,6 @@
 //
 //===----------------------------------------------------------------------===//
 
-// FIXME: We should have a generic register context definition that can be
-// shared among all plugins.  This is a near duplicate of the mac code.
-
 #ifndef liblldb_RegisterContext_x86_64_H_
 #define liblldb_RegisterContext_x86_64_H_
 
@@ -138,7 +135,7 @@ public:
         int reserved;
         int pad1;
         unsigned long u_ar0;
-        struct user_i387_struct *u_fpstate;
+        FPU *u_fpstate;
         unsigned long magic;
         char u_comm[32];
         unsigned long u_debugreg[8];

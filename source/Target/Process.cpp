@@ -1428,6 +1428,7 @@ Process::ControlPrivateStateThread (uint32_t signal)
 
             thread_result_t result = NULL;
             Host::ThreadJoin (m_private_state_thread, &result, NULL);
+            m_private_state_thread = LLDB_INVALID_HOST_THREAD;
         }
     }
 }
@@ -1465,7 +1466,6 @@ Process::PrivateStateThread (void *arg)
 {
     Process *proc = static_cast<Process*> (arg);
     void *result = proc->RunPrivateStateThread ();
-    proc->m_private_state_thread = LLDB_INVALID_HOST_THREAD;
     return result;
 }
 
